@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"encoding/json"
+	"math"
 )
 
 type GlobalSettings struct {
@@ -20,9 +21,7 @@ type DrawParams struct {
 }
 
 type Triangle struct {
-	vertexA rl.Vector2
-	vertexB rl.Vector2
-	vertexC rl.Vector2
+	points [3]rl.Vector2
 	color rl.Color 
 }
 
@@ -36,6 +35,44 @@ type PointJSON struct {
 	PointX float32 `json:"x"`
 	PointY float32 `json:"y"`
 }
+
+func nearestPoint(point rl.Vector2) rl.Vector2 {
+	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
+
+	point.X = float32(math.Round(float64(point.X) / 40.0)) * 40
+	point.Y = float32(math.Round(float64(point.Y) / 40.0)) * 40
+
+	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
+	return point
+}
+
+func collisions(a, b Triangle) []rl.Vector2 {
+	var collisionPoints []rl.Vector2
+	var tempPoint rl.Vector2
+
+
+	for i := 0; i < len(a.points); i++ {
+		for j := 0; j < len(a.points); j++ {
+			for k := 0; k < len(b.points); k++ {
+				for l := 0; l < len(b.points); l++ {
+					if rl.CheckCollisionLines(a.points[i], a.points[j], b.points[k], b.points[l], &tempPoint) {
+						collisionPoints = append(collisionPoints, tempPoint)
+					}
+				}
+			}
+		}
+	}
+
+	keys := make(map[rl.Vector2]bool)
+    uniqueCollisionPoints := []rl.Vector2{}	
+    for _, entry := range collisionPoints {
+        if _, value := keys[entry]; !value {
+            keys[entry] = true
+            uniqueCollisionPoints = append(uniqueCollisionPoints, entry)
+        }
+    }    
+	return uniqueCollisionPoints
+} 
 
 var settings GlobalSettings
 var drawParams DrawParams
@@ -51,41 +88,40 @@ func processKeys() {
 	}
 	if rl.IsKeyPressed(rl.KeyS) {
 		var layer int
-		for _, figure := range triangleArray {
-			PA := PointJSON{figure.vertexA.X,figure.vertexA.Y}
-			PB := PointJSON{figure.vertexB.X,figure.vertexB.Y}
-			PC := PointJSON{figure.vertexC.X,figure.vertexC.Y}
-			if figure.color == rl.NewColor(0, 82, 172, 100) {
+		for id, figure := range triangleArray {
+			PA := PointJSON{figure.points[0].X, figure.points[0].Y}
+			PB := PointJSON{figure.points[1].X, figure.points[1].Y}
+			PC := PointJSON{figure.points[2].X, figure.points[2].Y}
+			if figure.color == rl.NewColor(255, 255, 0, 100) {
 				layer = 1
-			} else if figure.color == rl.NewColor(230, 41, 55, 100) {
+			} else if figure.color == rl.NewColor(0, 0, 255, 100) {
 				layer = 0
 			}
-			temTriJS := PolygonJSON{0, layer, []PointJSON{PA,PB,PC}}
+			temTriJS := PolygonJSON{id, layer, []PointJSON{PA,PB,PC}}
 			data, err := json.MarshalIndent(temTriJS, "", " ")
 			if err != nil {
 				log.Fatalf("ERROR JSON: %s", err)
 			}
 			fmt.Printf("%s\n", data)
 		}
+		fmt.Printf("%d\n", len(collisions(triangleArray[0], triangleArray[1])))
 	}
 	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		switch vertexCounter {
 		case 0:
-			tempTriangle.vertexC = rl.GetMousePosition()
+			tempTriangle.points[2] = nearestPoint(rl.GetMousePosition())
 		case 1:
-			tempTriangle.vertexB = rl.GetMousePosition()
+			tempTriangle.points[1] = nearestPoint(rl.GetMousePosition())
 		case 2:
-			tempTriangle.vertexA = rl.GetMousePosition()
+			tempTriangle.points[0] = nearestPoint(rl.GetMousePosition())
 		}
 		vertexCounter++
 	}
 	if vertexCounter == 3 {
 		if settings.layerSwitch {
-			DarkBlueTrans := rl.NewColor(0, 82, 172, 100)
-			tempTriangle.color = DarkBlueTrans
+			tempTriangle.color = rl.NewColor(255, 255, 0, 100)
 		} else {
-			RedTrans := rl.NewColor(230, 41, 55, 100)
-			tempTriangle.color = RedTrans
+			tempTriangle.color = rl.NewColor(0, 0, 255, 100)
 		}
 		triangleArray = append(triangleArray, tempTriangle)
 		vertexCounter = 0
@@ -103,8 +139,19 @@ func drawCanvas() {
 
 func drawFigures() {
 	for _, figure := range triangleArray {
-		rl.DrawTriangle(figure.vertexA, figure.vertexB, figure.vertexC, figure.color)
+		rl.DrawTriangle(figure.points[0], figure.points[1], figure.points[2], figure.color)
 	}
+
+	if len(triangleArray) > 1 {
+		for i := 0; i < len(triangleArray); i++ {
+			for j := i + 1; j < len(triangleArray); j++ {
+				for _, point := range collisions(triangleArray[i], triangleArray[j]) {
+					rl.DrawCircleV(point, float32(4), rl.Red)
+				}
+			}
+		}
+	}
+
 }
 
 func drawStats() {
@@ -118,7 +165,7 @@ func main() {
 	settings.layerSwitch = false
 	settings.screenWidth = int32(1200)
 	settings.screenHeight = int32(1200)
-	settings.spacer = settings.screenWidth / 40
+	settings.spacer = settings.screenWidth / 30
 
 	vertexCounter = 0
 
