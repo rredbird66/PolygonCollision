@@ -1,19 +1,19 @@
 package main
 
 import (
-	"github.com/gen2brain/raylib-go/raylib"
-	"fmt"
-	"log"
-	"strconv"
 	"encoding/json"
+	"fmt"
+	"github.com/gen2brain/raylib-go/raylib"
+	"log"
 	"math"
+	"strconv"
 )
 
 type GlobalSettings struct {
-	layerSwitch bool
-	screenWidth int32
+	layerSwitch  bool
+	screenWidth  int32
 	screenHeight int32
-	spacer int32
+	spacer       int32
 }
 
 type DrawParams struct {
@@ -22,12 +22,12 @@ type DrawParams struct {
 
 type Triangle struct {
 	points [3]rl.Vector2
-	color rl.Color 
+	color  rl.Color
 }
 
 type PolygonJSON struct {
-	Id int `json:"id"`
-	Layer int `json:"layer"`
+	Id     int `json:"id"`
+	Layer  int `json:"layer"`
 	Points []PointJSON
 }
 
@@ -39,8 +39,8 @@ type PointJSON struct {
 func nearestPoint(point rl.Vector2) rl.Vector2 {
 	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
 
-	point.X = float32(math.Round(float64(point.X) / 40.0)) * 40
-	point.Y = float32(math.Round(float64(point.Y) / 40.0)) * 40
+	point.X = float32(math.Round(float64(point.X)/40.0)) * 40
+	point.Y = float32(math.Round(float64(point.Y)/40.0)) * 40
 
 	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
 	return point
@@ -49,7 +49,6 @@ func nearestPoint(point rl.Vector2) rl.Vector2 {
 func collisions(a, b Triangle) []rl.Vector2 {
 	var collisionPoints []rl.Vector2
 	var tempPoint rl.Vector2
-
 
 	for i := 0; i < len(a.points); i++ {
 		for j := 0; j < len(a.points); j++ {
@@ -64,15 +63,15 @@ func collisions(a, b Triangle) []rl.Vector2 {
 	}
 
 	keys := make(map[rl.Vector2]bool)
-    uniqueCollisionPoints := []rl.Vector2{}	
-    for _, entry := range collisionPoints {
-        if _, value := keys[entry]; !value {
-            keys[entry] = true
-            uniqueCollisionPoints = append(uniqueCollisionPoints, entry)
-        }
-    }    
+	uniqueCollisionPoints := []rl.Vector2{}
+	for _, entry := range collisionPoints {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			uniqueCollisionPoints = append(uniqueCollisionPoints, entry)
+		}
+	}
 	return uniqueCollisionPoints
-} 
+}
 
 var settings GlobalSettings
 var drawParams DrawParams
@@ -97,7 +96,7 @@ func processKeys() {
 			} else if figure.color == rl.NewColor(0, 0, 255, 100) {
 				layer = 0
 			}
-			temTriJS := PolygonJSON{id, layer, []PointJSON{PA,PB,PC}}
+			temTriJS := PolygonJSON{id, layer, []PointJSON{PA, PB, PC}}
 			data, err := json.MarshalIndent(temTriJS, "", " ")
 			if err != nil {
 				log.Fatalf("ERROR JSON: %s", err)
@@ -155,9 +154,9 @@ func drawFigures() {
 }
 
 func drawStats() {
-	rl.DrawText("Vertex  #" + strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
-	rl.DrawText("FPS:     " + strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
-	rl.DrawText("Figures: " + strconv.Itoa(len(triangleArray)), 20, 60, 20, rl.DarkGray)
+	rl.DrawText("Vertex  #"+strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
+	rl.DrawText("FPS:     "+strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
+	rl.DrawText("Figures: "+strconv.Itoa(len(triangleArray)), 20, 60, 20, rl.DarkGray)
 }
 
 func main() {
@@ -176,11 +175,11 @@ func main() {
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.RayWhite)
-		
+
 		processKeys()
 		drawCanvas()
 		drawFigures()
-		
+
 		drawStats()
 		rl.EndDrawing()
 	}
