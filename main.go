@@ -28,6 +28,12 @@ type Polygon struct {
 	points []rl.Vector2
 }
 
+type Edge struct {
+	Begin rl.Vector2
+	End   rl.Vector2
+	angle float32
+}
+
 type PolygonJSON struct {
 	Id     int `json:"id"`
 	Layer  int `json:"layer"`
@@ -40,12 +46,8 @@ type PointJSON struct {
 }
 
 func nearestPoint(point rl.Vector2) rl.Vector2 {
-	//fmt.Printf("x:%f y:%f\n", point.X, point.Y)
-
 	point.X = float32(math.Round(float64(point.X)/40.0)) * 40
 	point.Y = float32(math.Round(float64(point.Y)/40.0)) * 40
-
-	//fmt.Printf("x:%f y:%f\n", point.X, point.Y)
 	return point
 }
 
@@ -113,8 +115,12 @@ func drawFigures() {
 		rl.DrawCircle(int32(point.X), int32(point.Y), 5, rl.Red)
 	}
 	for _, figure := range polygonArray {
-		for i := 0; (i + 1) < len(figure.points); i++ {
-			rl.DrawTriangle(figure.points[i+1], figure.points[i], figure.points[0], figure.color)
+		if len(figure.points) == 2 {
+			rl.DrawLineEx(figure.points[0], figure.points[1], 3, figure.color)
+		} else {
+			for i := 0; (i + 1) < len(figure.points); i++ {
+				rl.DrawTriangle(figure.points[i+1], figure.points[i], figure.points[0], figure.color)
+			}
 		}
 	}
 }
