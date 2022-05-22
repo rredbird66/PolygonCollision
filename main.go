@@ -1,33 +1,36 @@
 package main
 
 import (
-	"github.com/gen2brain/raylib-go/raylib"
-	"fmt"
-	"log"
-	"strconv"
 	"encoding/json"
+	"fmt"
+	"github.com/gen2brain/raylib-go/raylib"
+	"log"
 	"math"
+	"strconv"
+    "sort"
 )
 
 type GlobalSettings struct {
-	layerSwitch bool
-	screenWidth int32
+	layerSwitch  bool
+	screenWidth  int32
 	screenHeight int32
-	spacer int32
+	spacer       int32
 }
 
 type DrawParams struct {
 	triColor rl.Color
 }
 
-type Triangle struct {
-	points [3]rl.Vector2
-	color rl.Color 
+type Polygon struct {
+	Id     int
+	Layer  int
+	color  rl.Color
+	points []rl.Vector2
 }
 
 type PolygonJSON struct {
-	Id int `json:"id"`
-	Layer int `json:"layer"`
+	Id     int `json:"id"`
+	Layer  int `json:"layer"`
 	Points []PointJSON
 }
 
@@ -37,49 +40,25 @@ type PointJSON struct {
 }
 
 func nearestPoint(point rl.Vector2) rl.Vector2 {
-	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
+	//fmt.Printf("x:%f y:%f\n", point.X, point.Y)
 
-	point.X = float32(math.Round(float64(point.X) / 40.0)) * 40
-	point.Y = float32(math.Round(float64(point.Y) / 40.0)) * 40
+	point.X = float32(math.Round(float64(point.X)/40.0)) * 40
+	point.Y = float32(math.Round(float64(point.Y)/40.0)) * 40
 
-	fmt.Printf("x:%f y:%f\n", point.X, point.Y)
+	//fmt.Printf("x:%f y:%f\n", point.X, point.Y)
 	return point
 }
 
-func collisions(a, b Triangle) []rl.Vector2 {
-	var collisionPoints []rl.Vector2
-	var tempPoint rl.Vector2
-
-
-	for i := 0; i < len(a.points); i++ {
-		for j := 0; j < len(a.points); j++ {
-			for k := 0; k < len(b.points); k++ {
-				for l := 0; l < len(b.points); l++ {
-					if rl.CheckCollisionLines(a.points[i], a.points[j], b.points[k], b.points[l], &tempPoint) {
-						collisionPoints = append(collisionPoints, tempPoint)
-					}
-				}
-			}
-		}
-	}
-
-	keys := make(map[rl.Vector2]bool)
-    uniqueCollisionPoints := []rl.Vector2{}	
-    for _, entry := range collisionPoints {
-        if _, value := keys[entry]; !value {
-            keys[entry] = true
-            uniqueCollisionPoints = append(uniqueCollisionPoints, entry)
-        }
-    }    
-	return uniqueCollisionPoints
-} 
+func collisions() int {
+    return 0
+}
 
 var settings GlobalSettings
 var drawParams DrawParams
 
-var triangleArray []Triangle
+var polygonArray []Polygon
 
-var tempTriangle Triangle
+var tempPolygon Polygon
 var vertexCounter int
 
 func processKeys() {
@@ -88,43 +67,35 @@ func processKeys() {
 	}
 	if rl.IsKeyPressed(rl.KeyS) {
 		var layer int
-		for id, figure := range triangleArray {
-			PA := PointJSON{figure.points[0].X, figure.points[0].Y}
-			PB := PointJSON{figure.points[1].X, figure.points[1].Y}
-			PC := PointJSON{figure.points[2].X, figure.points[2].Y}
+		for id, figure := range polygonArray {
+			var tempPointsArray []PointJSON
+			for _, point := range figure.points {
+				tempPointsArray = append(tempPointsArray, PointJSON{point.X, point.Y})
+			}
 			if figure.color == rl.NewColor(255, 255, 0, 100) {
 				layer = 1
 			} else if figure.color == rl.NewColor(0, 0, 255, 100) {
 				layer = 0
 			}
-			temTriJS := PolygonJSON{id, layer, []PointJSON{PA,PB,PC}}
-			data, err := json.MarshalIndent(temTriJS, "", " ")
+			tempPolyJS := PolygonJSON{id, layer, tempPointsArray}
+			data, err := json.MarshalIndent(tempPolyJS, "", " ")
 			if err != nil {
 				log.Fatalf("ERROR JSON: %s", err)
 			}
 			fmt.Printf("%s\n", data)
 		}
-		fmt.Printf("%d\n", len(collisions(triangleArray[0], triangleArray[1])))
 	}
 	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		switch vertexCounter {
-		case 0:
-			tempTriangle.points[2] = nearestPoint(rl.GetMousePosition())
-		case 1:
-			tempTriangle.points[1] = nearestPoint(rl.GetMousePosition())
-		case 2:
-			tempTriangle.points[0] = nearestPoint(rl.GetMousePosition())
-		}
-		vertexCounter++
+		tempPolygon.points = append(tempPolygon.points, nearestPoint(rl.GetMousePosition()))
 	}
-	if vertexCounter == 3 {
+	if rl.IsMouseButtonPressed(rl.MouseRightButton) {
 		if settings.layerSwitch {
-			tempTriangle.color = rl.NewColor(255, 255, 0, 100)
+			tempPolygon.color = rl.NewColor(255, 255, 0, 100)
 		} else {
-			tempTriangle.color = rl.NewColor(0, 0, 255, 100)
+			tempPolygon.color = rl.NewColor(0, 0, 255, 100)
 		}
-		triangleArray = append(triangleArray, tempTriangle)
-		vertexCounter = 0
+		polygonArray = append(polygonArray, tempPolygon)
+		tempPolygon.points = nil
 	}
 }
 
@@ -138,26 +109,50 @@ func drawCanvas() {
 }
 
 func drawFigures() {
-	for _, figure := range triangleArray {
-		rl.DrawTriangle(figure.points[0], figure.points[1], figure.points[2], figure.color)
+	for _, point := range tempPolygon.points {
+		rl.DrawCircle(int32(point.X), int32(point.Y), 5, rl.Red)
 	}
+	for _, figure := range polygonArray {
+		for i := 0; (i + 1) < len(figure.points); i++ {
+			rl.DrawTriangle(figure.points[i+1], figure.points[i], figure.points[0], figure.color)
+		}
+	}
+}
 
-	if len(triangleArray) > 1 {
-		for i := 0; i < len(triangleArray); i++ {
-			for j := i + 1; j < len(triangleArray); j++ {
-				for _, point := range collisions(triangleArray[i], triangleArray[j]) {
-					rl.DrawCircleV(point, float32(4), rl.Red)
-				}
-			}
+func pointArrayContains(pointsArray []rl.Vector2, point rl.Vector2) bool {
+    for _, a := range pointsArray {
+        if a == point {
+            return true
+        }
+    }
+    return false
+}
+
+func sweepLine() {
+	var tempPointsArray []rl.Vector2
+	for _, figure := range polygonArray {
+        for _, point := range figure.points {
+			if(!pointArrayContains(tempPointsArray, point)) {
+                tempPointsArray = append(tempPointsArray, point)
+            }
 		}
 	}
 
+    sort.SliceStable(tempPointsArray, func(i, j int) bool {
+        return tempPointsArray[i].Y < tempPointsArray[j].Y
+    })
+
+    for idx, point := range tempPointsArray {
+        rl.DrawText("line #"+strconv.Itoa(idx), 5, int32(point.Y), 20, rl.Red)
+        rl.DrawLine(0, int32(point.Y), 1200, int32(point.Y), rl.Red)
+    }
 }
 
+
 func drawStats() {
-	rl.DrawText("Vertex  #" + strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
-	rl.DrawText("FPS:     " + strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
-	rl.DrawText("Figures: " + strconv.Itoa(len(triangleArray)), 20, 60, 20, rl.DarkGray)
+	rl.DrawText("Vertex  #"+strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
+	rl.DrawText("FPS:     "+strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
+	rl.DrawText("Figures: "+strconv.Itoa(len(polygonArray)), 20, 60, 20, rl.DarkGray)
 }
 
 func main() {
@@ -176,11 +171,12 @@ func main() {
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.RayWhite)
-		
+
 		processKeys()
 		drawCanvas()
 		drawFigures()
-		
+        sweepLine()
+
 		drawStats()
 		rl.EndDrawing()
 	}
