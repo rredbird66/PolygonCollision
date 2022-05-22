@@ -155,9 +155,13 @@ func sweepLine() {
 }
 
 func drawStats() {
-	rl.DrawText("Vertex  #"+strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
 	rl.DrawText("FPS:     "+strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
 	rl.DrawText("Figures: "+strconv.Itoa(len(polygonArray)), 20, 60, 20, rl.DarkGray)
+
+	rl.DrawText("LMC - add vertex to polygon", 20, 80, 20, rl.DarkGray)
+	rl.DrawText("RMC - create polygon from added vertexes", 20, 100, 20, rl.DarkGray)
+	rl.DrawText("H - switch layer", 20, 120, 20, rl.DarkGray)
+	rl.DrawText("S - output JSON-formatted figures in terminal", 20, 140, 20, rl.DarkGray)
 }
 
 func main() {
