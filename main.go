@@ -6,8 +6,8 @@ import (
 	"github.com/gen2brain/raylib-go/raylib"
 	"log"
 	"math"
+	"sort"
 	"strconv"
-    "sort"
 )
 
 type GlobalSettings struct {
@@ -50,7 +50,7 @@ func nearestPoint(point rl.Vector2) rl.Vector2 {
 }
 
 func collisions() int {
-    return 0
+	return 0
 }
 
 var settings GlobalSettings
@@ -120,34 +120,33 @@ func drawFigures() {
 }
 
 func pointArrayContains(pointsArray []rl.Vector2, point rl.Vector2) bool {
-    for _, a := range pointsArray {
-        if a == point {
-            return true
-        }
-    }
-    return false
+	for _, a := range pointsArray {
+		if a == point {
+			return true
+		}
+	}
+	return false
 }
 
 func sweepLine() {
 	var tempPointsArray []rl.Vector2
 	for _, figure := range polygonArray {
-        for _, point := range figure.points {
-			if(!pointArrayContains(tempPointsArray, point)) {
-                tempPointsArray = append(tempPointsArray, point)
-            }
+		for _, point := range figure.points {
+			if !pointArrayContains(tempPointsArray, point) {
+				tempPointsArray = append(tempPointsArray, point)
+			}
 		}
 	}
 
-    sort.SliceStable(tempPointsArray, func(i, j int) bool {
-        return tempPointsArray[i].Y < tempPointsArray[j].Y
-    })
+	sort.SliceStable(tempPointsArray, func(i, j int) bool {
+		return tempPointsArray[i].Y < tempPointsArray[j].Y
+	})
 
-    for idx, point := range tempPointsArray {
-        rl.DrawText("line #"+strconv.Itoa(idx), 5, int32(point.Y), 20, rl.Red)
-        rl.DrawLine(0, int32(point.Y), 1200, int32(point.Y), rl.Red)
-    }
+	for idx, point := range tempPointsArray {
+		rl.DrawText("line #"+strconv.Itoa(idx), 5, int32(point.Y), 20, rl.Red)
+		rl.DrawLine(0, int32(point.Y), 1200, int32(point.Y), rl.Red)
+	}
 }
-
 
 func drawStats() {
 	rl.DrawText("Vertex  #"+strconv.Itoa(vertexCounter), 20, 20, 20, rl.DarkGray)
@@ -175,7 +174,7 @@ func main() {
 		processKeys()
 		drawCanvas()
 		drawFigures()
-        sweepLine()
+		sweepLine()
 
 		drawStats()
 		rl.EndDrawing()
