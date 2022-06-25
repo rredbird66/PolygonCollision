@@ -1,5 +1,6 @@
 package main
 
+////////////////////////////////////////////////////////////////////////////////
 import (
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,9 @@ import (
 	"strconv"
 )
 
+////////////////////////////////////////////////////////////////////////////////
+//	Structures
+////////////////////////////////////////////////////////////////////////////////
 type GlobalSettings struct {
 	layerSwitch  bool
 	screenWidth  int32
@@ -22,135 +26,186 @@ type DrawParams struct {
 }
 
 type Polygon struct {
-	Id     int
-	Layer  int
-	color  rl.Color
-	points []rl.Vector2
+	Id     int      `json:"id"`
+	Layer  int      `json:"layer"`
+	Points []Point2 `json:"points"`
 }
 
 type Edge struct {
-	Begin rl.Vector2
-	End   rl.Vector2
-	//angle float32
+	Begin Point2  `json:"begin"`
+	End   Point2  `json:"end"`
+	Angle float64 `json:"angle"`
+	Layer int     `json:"layer"`
+	Open  bool    `json:"open"`
 }
 
-type PolygonJSON struct {
-	Id     int `json:"id"`
-	Layer  int `json:"layer"`
-	Points []PointJSON
+type Point2 struct {
+	X float32 `json:"x"`
+	Y float32 `json:"y"`
 }
 
-type PointJSON struct {
-	PointX float32 `json:"x"`
-	PointY float32 `json:"y"`
-}
+////////////////////////////////////////////////////////////////////////////////
+// Global variables
+////////////////////////////////////////////////////////////////////////////////
+var g_settings GlobalSettings
+var g_drawParams DrawParams
 
-func nearestPoint(point rl.Vector2) rl.Vector2 {
-	point.X = float32(math.Round(float64(point.X)/40.0)) * 40
-	point.Y = float32(math.Round(float64(point.Y)/40.0)) * 40
-	return point
-}
+var g_polygonArray []Polygon
+var g_edgesArray []Edge
+var g_pointsArray []Point2
+var g_processedEdgesArray []Edge
 
-func collisions() int {
-	return 0
-}
+var g_tempPolygon Polygon
 
-var settings GlobalSettings
-var drawParams DrawParams
-
-var polygonArray []Polygon
-var edgesArray []Edge
-
-var tempPolygon Polygon
-
-func processKeys() {
-	if rl.IsKeyPressed(rl.KeyH) {
-		settings.layerSwitch = !settings.layerSwitch
-	}
-	if rl.IsKeyPressed(rl.KeyE) {
-		edgesArray = nil
-		getEdges()
-		transformEdges()
-	}
-	if rl.IsKeyPressed(rl.KeyP) {
-		printEdges()
-	}
-	if rl.IsKeyPressed(rl.KeyS) {
-		var layer int
-		for id, figure := range polygonArray {
-			var tempPointsArray []PointJSON
-			for _, point := range figure.points {
-				tempPointsArray = append(tempPointsArray, PointJSON{point.X, point.Y})
-			}
-			if figure.color == rl.NewColor(255, 255, 0, 100) {
-				layer = 1
-			} else if figure.color == rl.NewColor(0, 0, 255, 100) {
-				layer = 0
-			}
-			tempPolyJS := PolygonJSON{id, layer, tempPointsArray}
-			data, err := json.MarshalIndent(tempPolyJS, "", " ")
-			if err != nil {
-				log.Fatalf("ERROR JSON: %s", err)
-			}
-			fmt.Printf("%s\n", data)
-		}
-	}
-	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		tempPolygon.points = append(tempPolygon.points, nearestPoint(rl.GetMousePosition()))
-	}
-	if rl.IsMouseButtonPressed(rl.MouseRightButton) && tempPolygon.points != nil {
-		if settings.layerSwitch {
-			tempPolygon.color = rl.NewColor(255, 255, 0, 100)
-		} else {
-			tempPolygon.color = rl.NewColor(0, 0, 255, 100)
-		}
-		polygonArray = append(polygonArray, tempPolygon)
-		tempPolygon.points = nil
+////////////////////////////////////////////////////////////////////////////////
+// Functions
+////////////////////////////////////////////////////////////////////////////////
+func printEdges() {
+	for idx, edge := range g_edgesArray {
+		fmt.Printf("LOG:: Edge #%d | BeginX: %f BeginY: %f\n", idx, edge.Begin.X, edge.Begin.Y)
+		fmt.Printf("LOG:: Edge #%d | EndX: %f EndY: %f\n", idx, edge.End.X, edge.End.Y)
 	}
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Converter functions
+////////////////////////////////////////////////////////////////////////////////
+func p2rlP(point Point2) rl.Vector2 {
+	return rl.Vector2{point.X, point.Y}
+}
+
+func rlP2p(point rl.Vector2) Point2 {
+	return Point2{point.X, point.Y}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Grafic related functions
+////////////////////////////////////////////////////////////////////////////////
 func drawCanvas() {
 	counter := int32(0)
-	for counter < settings.screenWidth {
-		rl.DrawLine(counter, 0, counter, settings.screenHeight, rl.LightGray)
-		rl.DrawLine(0, counter, settings.screenWidth, counter, rl.LightGray)
-		counter += settings.spacer
+	for counter < g_settings.screenWidth {
+		rl.DrawLine(counter, 0, counter, g_settings.screenHeight, rl.LightGray)
+		rl.DrawLine(0, counter, g_settings.screenWidth, counter, rl.LightGray)
+		counter += g_settings.spacer
 	}
 }
 
 func drawFigures() {
-	for _, point := range tempPolygon.points {
+	for _, point := range g_tempPolygon.Points {
 		rl.DrawCircle(int32(point.X), int32(point.Y), 5, rl.Red)
 	}
-	for _, figure := range polygonArray {
-		if len(figure.points) == 2 {
-			tempColor := figure.color
-			tempColor.A = 255
-			rl.DrawLineEx(figure.points[0], figure.points[1], 4, tempColor)
+	var tempColor rl.Color
+	for _, figure := range g_polygonArray {
+		if figure.Layer == 0 {
+			tempColor = rl.NewColor(0, 0, 255, 100)
 		} else {
-			for i := 0; (i + 1) < len(figure.points); i++ {
-				rl.DrawTriangle(figure.points[i+1], figure.points[i], figure.points[0], figure.color)
+			tempColor = rl.NewColor(255, 255, 0, 100)
+		}
+		if len(figure.Points) == 2 {
+			tempColor.A = 255
+			rl.DrawLineEx(p2rlP(figure.Points[0]), p2rlP(figure.Points[1]), 4, tempColor)
+		} else {
+			for i := 0; (i + 1) < len(figure.Points); i++ {
+				rl.DrawTriangle(p2rlP(figure.Points[i+1]), p2rlP(figure.Points[i]), p2rlP(figure.Points[0]), tempColor)
 			}
 		}
 	}
 }
 
 func drawPoints() {
-	for _, figure := range polygonArray {
-		for _, point := range figure.points {
+	for _, figure := range g_polygonArray {
+		for _, point := range figure.Points {
 			rl.DrawCircle(int32(point.X), int32(point.Y), 5, rl.DarkGreen)
 		}
+	}
+	for _, point := range g_pointsArray {
+		rl.DrawCircle(int32(point.X), int32(point.Y), 5, rl.Green)
 	}
 }
 
 func drawEdges() {
-	for idx, edge := range edgesArray {
-		rl.DrawLineEx(edge.Begin, edge.End, 1, rl.DarkBlue)
+	for idx, edge := range g_edgesArray {
+		rl.DrawLineEx(p2rlP(edge.Begin), p2rlP(edge.End), 1, rl.DarkBlue)
 		rl.DrawText("edge #"+strconv.Itoa(idx)+" start", int32(edge.Begin.X), int32(edge.Begin.Y)+10, 10, rl.Red)
 		rl.DrawText("edge #"+strconv.Itoa(idx)+" end", int32(edge.End.X), int32(edge.End.Y)-10, 10, rl.Red)
 		//rl.DrawCircleV(edge.Begin, 10, rl.White)
 		//rl.DrawCircleV(edge.End, 10, rl.Black)
 	}
+}
+
+func drawStats() {
+
+	var heightCounter int32 = 20
+
+	counterF := func(x *int32) int32 {
+		*x = *x + 20
+		return *x
+	}
+
+	rl.DrawText("FPS:     "+strconv.Itoa(int(rl.GetFPS())), 20, counterF(&heightCounter), 20, rl.DarkGray)
+	rl.DrawText("Figures: "+strconv.Itoa(len(g_polygonArray)), 20, counterF(&heightCounter), 20, rl.DarkGray)
+
+	rl.DrawText("LMC - add vertex to polygon", 20, counterF(&heightCounter), 20, rl.DarkGray)
+	rl.DrawText("RMC - create polygon from added vertexes", 20, counterF(&heightCounter), 20, rl.DarkGray)
+	rl.DrawText("H - switch layer", 20, counterF(&heightCounter), 20, rl.DarkGray)
+	rl.DrawText("S - output JSON-formatted figures in terminal", 20, counterF(&heightCounter), 20, rl.DarkGray)
+	rl.DrawText("Z - exit", 20, counterF(&heightCounter), 20, rl.DarkGray)
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//  Input related functions
+////////////////////////////////////////////////////////////////////////////////
+func processKeys() {
+	if rl.IsKeyPressed(rl.KeyH) {
+		g_settings.layerSwitch = !g_settings.layerSwitch
+	}
+	if rl.IsKeyPressed(rl.KeyE) {
+		g_edgesArray = nil
+		getEdges()
+		transformEdges()
+	}
+	if rl.IsKeyPressed(rl.KeyL) {
+		sweepLine()
+	}
+	if rl.IsKeyPressed(rl.KeyP) {
+		data, err := json.MarshalIndent(g_edgesArray, "", " ")
+		if err != nil {
+			log.Fatalf("ERROR JSON: %s", err)
+		}
+		fmt.Printf("%s\n", data)
+	}
+	if rl.IsKeyPressed(rl.KeyS) {
+		data, err := json.MarshalIndent(g_polygonArray, "", " ")
+		if err != nil {
+			log.Fatalf("ERROR JSON: %s", err)
+		}
+		fmt.Printf("%s\n", data)
+	}
+	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		g_tempPolygon.Points = append(g_tempPolygon.Points, nearestPoint(rl.GetMousePosition()))
+	}
+	if rl.IsMouseButtonPressed(rl.MouseRightButton) && g_tempPolygon.Points != nil {
+		if g_settings.layerSwitch {
+			g_tempPolygon.Layer = 1
+		} else {
+			g_tempPolygon.Layer = 0
+		}
+		g_tempPolygon.Id = len(g_polygonArray)
+		g_polygonArray = append(g_polygonArray, g_tempPolygon)
+		g_tempPolygon.Points = nil
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//  Logic functions
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+//	Point functions
+////////////////////////////////////////////////////////////////////////////////
+func nearestPoint(point rl.Vector2) Point2 {
+	point.X = float32(math.Round(float64(point.X)/40.0)) * 40
+	point.Y = float32(math.Round(float64(point.Y)/40.0)) * 40
+	return rlP2p(point)
 }
 
 func pointArrayContains(pointsArray []rl.Vector2, other rl.Vector2) bool {
@@ -160,6 +215,22 @@ func pointArrayContains(pointsArray []rl.Vector2, other rl.Vector2) bool {
 		}
 	}
 	return false
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Edge functions
+////////////////////////////////////////////////////////////////////////////////
+func getAngle(p1 Point2, p2 Point2) float64 {
+	return math.Atan2(float64(p2.Y-p1.Y), float64(p2.X-p1.X))
+}
+
+// Closure
+func getCollision(e1 Edge) func(e2 Edge) (bool, Point2) {
+	return func(e2 Edge) (bool, Point2) {
+		var crossingPoint rl.Vector2
+		res := rl.CheckCollisionLines(p2rlP(e1.Begin), p2rlP(e1.End), p2rlP(e2.Begin), p2rlP(e2.End), &crossingPoint)
+		return res, rlP2p(crossingPoint)
+	}
 }
 
 func edgesArrayContains(arr []Edge, other Edge) bool {
@@ -172,81 +243,64 @@ func edgesArrayContains(arr []Edge, other Edge) bool {
 }
 
 func getEdges() {
-	for _, figure := range polygonArray {
+	for _, figure := range g_polygonArray {
 		var tempEdge Edge
-		for i := 0; (i + 1) < len(figure.points); i++ {
-			tempEdge = Edge{figure.points[i], figure.points[i+1]}
-			if !edgesArrayContains(edgesArray, tempEdge) {
-				edgesArray = append(edgesArray, tempEdge)
+		for i := 0; (i + 1) < len(figure.Points); i++ {
+			if figure.Points[i].Y != figure.Points[i+1].Y {
+				tempEdge = Edge{figure.Points[i], figure.Points[i+1], getAngle(figure.Points[i], figure.Points[i+1]), figure.Layer, true}
+				fmt.Printf("Angle: %f\n", tempEdge.Angle*360/math.Pi)
+				if !edgesArrayContains(g_edgesArray, tempEdge) {
+					g_edgesArray = append(g_edgesArray, tempEdge)
+				}
 			}
 		}
-		tempEdge = Edge{figure.points[len(figure.points)-1], figure.points[0]}
-		if !edgesArrayContains(edgesArray, tempEdge) {
-			edgesArray = append(edgesArray, tempEdge)
+		tempEdge = Edge{figure.Points[len(figure.Points)-1], figure.Points[0], getAngle(figure.Points[len(figure.Points)-1], figure.Points[0]), figure.Layer, true}
+		if !edgesArrayContains(g_edgesArray, tempEdge) {
+			g_edgesArray = append(g_edgesArray, tempEdge)
 		}
 	}
 }
 
 func transformEdges() {
-	for idx, edge := range edgesArray {
+	for idx, edge := range g_edgesArray {
 		if edge.Begin.Y > edge.End.Y {
-			edgesArray[idx].Begin, edgesArray[idx].End = edge.End, edge.Begin
+			g_edgesArray[idx].Begin, g_edgesArray[idx].End = edge.End, edge.Begin
 		}
 	}
-	sort.SliceStable(edgesArray, func(i, j int) bool {
-		return edgesArray[i].Begin.Y < edgesArray[j].Begin.Y
+	sort.SliceStable(g_edgesArray, func(i, j int) bool {
+		return g_edgesArray[i].Begin.Y < g_edgesArray[j].Begin.Y
 	})
 	//printEdges()
 }
 
-func printEdges() {
-	for idx, edge := range edgesArray {
-		fmt.Printf("LOG:: Edge #%d | BeginX: %f BeginY: %f\n", idx, edge.Begin.X, edge.Begin.Y)
-		fmt.Printf("LOG:: Edge #%d | EndX: %f EndY: %f\n", idx, edge.End.X, edge.End.Y)
+////////////////////////////////////////////////////////////////////////////////
+// Sweep line algorithm
+////////////////////////////////////////////////////////////////////////////////
+func sweepLine() {
+
+	g_pointsArray = nil
+	for idx1, edge1 := range g_edgesArray {
+		collider := getCollision(edge1)
+		for idx2 := idx1 + 1; idx2 < len(g_edgesArray); idx2++ {
+			res, point := collider(g_edgesArray[idx2])
+			if res {
+				g_pointsArray = append(g_pointsArray, point)
+			}
+		}
 	}
 }
 
-func sweepLine() {
-	/*
-		var tempPointsArray []rl.Vector2
-		for _, figure := range polygonArray {
-			for _, point := range figure.points {
-				if !pointArrayContains(tempPointsArray, point) {
-					tempPointsArray = append(tempPointsArray, point)
-				}
-			}
-		}
-
-		sort.SliceStable(tempPointsArray, func(i, j int) bool {
-			return tempPointsArray[i].Y < tempPointsArray[j].Y
-		})
-
-		for idx, point := range tempPointsArray {
-			rl.DrawText("line #"+strconv.Itoa(idx), 5, int32(point.Y), 20, rl.Red)
-			rl.DrawLine(0, int32(point.Y), 1200, int32(point.Y), rl.Red)
-		}
-	*/
-}
-
-func drawStats() {
-	rl.DrawText("FPS:     "+strconv.Itoa(int(rl.GetFPS())), 20, 40, 20, rl.DarkGray)
-	rl.DrawText("Figures: "+strconv.Itoa(len(polygonArray)), 20, 60, 20, rl.DarkGray)
-
-	rl.DrawText("LMC - add vertex to polygon", 20, 80, 20, rl.DarkGray)
-	rl.DrawText("RMC - create polygon from added vertexes", 20, 100, 20, rl.DarkGray)
-	rl.DrawText("H - switch layer", 20, 120, 20, rl.DarkGray)
-	rl.DrawText("S - output JSON-formatted figures in terminal", 20, 140, 20, rl.DarkGray)
-	rl.DrawText("Z - exit", 20, 160, 20, rl.DarkGray)
-}
-
+////////////////////////////////////////////////////////////////////////////////
+// Main function
+////////////////////////////////////////////////////////////////////////////////
 func main() {
 
-	settings.layerSwitch = false
-	settings.screenWidth = int32(1200)
-	settings.screenHeight = int32(1200)
-	settings.spacer = settings.screenWidth / 30
+	g_settings.layerSwitch = false
+	g_settings.screenWidth = int32(1000)
+	g_settings.screenHeight = int32(1000)
+	g_settings.spacer = g_settings.screenWidth / 25
 
-	rl.InitWindow(settings.screenWidth, settings.screenHeight, "PolygonCollision")
+	rl.InitWindow(g_settings.screenWidth, g_settings.screenHeight, "PolygonCollision")
 	rl.SetTargetFPS(60)
 	rl.SetExitKey(rl.KeyZ)
 
@@ -258,7 +312,6 @@ func main() {
 		processKeys()
 		drawCanvas()
 		drawFigures()
-		sweepLine()
 		drawEdges()
 		drawPoints()
 
@@ -268,3 +321,5 @@ func main() {
 
 	rl.CloseWindow()
 }
+
+////////////////////////////////////////////////////////////////////////////////
